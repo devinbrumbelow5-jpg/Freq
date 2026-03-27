@@ -1,0 +1,30 @@
+# Sensitive files
+.openclaw/
+memory/
+SOUL.md
+USER.md
+IDENTITY.md
+
+# Data files
+data/
+*.sqlite
+*.sqlite-*
+*.pkl
+*.backup
+
+# Logs
+logs/
+*.log
+
+# Python cache
+__pycache__/
+*.pyc
+*.pyo
+
+# Node modules
+node_modules/
+
+# Freqtrade runtime
+tradesv3*.sqlite*
+*.pyc
+*.pyo
