@@ -1,283 +1,298 @@
 #!/bin/bash
-# ═══════════════════════════════════════════════════════════════
-# Self-Healing Agent - Container Monitor & Auto-Restart Service
-# Freq Trading Swarm - Brownwood, Texas
-# ═══════════════════════════════════════════════════════════════
+# ═══════════════════════════════════════════════════════════════════
+# Freq Ultimate Scalper v2.0 - Self-Healing Agent (Production 2026)
+# Zero-downtime restart, healthcheck-driven, resource-aware
+# ═══════════════════════════════════════════════════════════════════
 
 # Configuration
-WORKSPACE="/root/.openclaw/workspace"
-COMPOSE_FILE="$WORKSPACE/docker-compose.yml"
-LOG_FILE="$WORKSPACE/memory/restarts.log"
-PID_FILE="/tmp/self-healing-agent.pid"
-CHECK_INTERVAL=30  # Check every 30 seconds
-MAX_RESTART_ATTEMPTS=3
-RESTART_WINDOW=300  # 5 minutes
+WORKSPACE="${WORKSPACE:-/root/.openclaw/workspace}"
+COMPOSE_FILE="${COMPOSE_FILE:-$WORKSPACE/freqtrade/docker-compose.yml}"
+LOG_FILE="${LOG_FILE:-$WORKSPACE/logs/healing-agent.log}"
+PID_FILE="${PID_FILE:-/tmp/freq-healing-agent.pid}"
+ALERT_LOG="${ALERT_LOG:-$WORKSPACE/logs/alerts.log}"
 
-# Colors for terminal output
+CHECK_INTERVAL="${CHECK_INTERVAL:-30}"
+MAX_RESTART_ATTEMPTS="${MAX_RESTART_ATTEMPTS:-5}"
+RESTART_WINDOW="${RESTART_WINDOW:-300}"
+HEALTHY_THRESHOLD="${HEALTHY_THRESHOLD:-180}"
+
+# Colors
 RED='\033[0;31m'
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
 BLUE='\033[0;34m'
-NC='\033[0m' # No Color
+NC='\033[0m'
 
-# Timestamp function
-timestamp() {
-    date '+[%Y-%m-%d %H:%M:%S]'
-}
+# ═════════════════════════════════════════════════════════════════
+# LOGGING
+# ═════════════════════════════════════════════════════════════════
+timestamp() { date '+[%Y-%m-%d %H:%M:%S]'; }
 
-# Log to both terminal and file
 log() {
     local level="$1"
     local message="$2"
-    local container="${3:-SYSTEM}"
+    local container="${3:-AGENT}"
     local ts=$(timestamp)
     
-    # Terminal output with colors
     case "$level" in
-        "INFO")
-            echo -e "${ts} ${BLUE}[HEALER]${NC} [${level}] [${container}] ${message}"
-            ;;
-        "WARN")
-            echo -e "${ts} ${YELLOW}[HEALER]${NC} [${level}] [${container}] ${message}"
-            ;;
-        "ERROR"|"CRITICAL")
-            echo -e "${ts} ${RED}[HEALER]${NC} [${level}] [${container}] ${message}"
-            ;;
-        "RESTART")
-            echo -e "${ts} ${GREEN}[HEALER]${NC} [${level}] [${container}] ${message}"
-            ;;
+        "INFO") echo -e "${ts} ${BLUE}[HEALER]${NC} [${level}] [${container}] ${message}" ;;
+        "WARN") echo -e "${ts} ${YELLOW}[HEALER]${NC} [${level}] [${container}] ${message}" ;;
+        "ERROR"|"CRITICAL") echo -e "${ts} ${RED}[HEALER]${NC} [${level}] [${container}] ${message}" ;;
+        "RESTART") echo -e "${ts} ${GREEN}[HEALER]${NC} [${level}] [${container}] ${message}" ;;
     esac
     
-    # File output (no colors)
+    mkdir -p "$(dirname "$LOG_FILE")"
     echo "${ts} [HEALER] [${level}] [${container}] ${message}" >> "$LOG_FILE"
 }
 
-# Initialize log file
-init_log() {
-    mkdir -p "$WORKSPACE/memory"
-    if [ ! -f "$LOG_FILE" ]; then
-        touch "$LOG_FILE"
-        log "INFO" "Self-healing agent initialized"
-        log "INFO" "Monitor interval: ${CHECK_INTERVAL}s | Max restarts: ${MAX_RESTART_ATTEMPTS}"
-    fi
-    log "INFO" "Self-healing agent started"
-}
+# ═════════════════════════════════════════════════════════════════
+# CONTAINER MANAGEMENT
+# ═════════════════════════════════════════════════════════════════
+declare -A RESTART_COUNT
+declare -A LAST_RESTART_TIME
 
-# Track restart attempts per container
-declare -A restart_count
-declare -A last_restart_time
-
-# Check if container is healthy
-check_container_health() {
-    local container_name="$1"
-    local status=$(docker ps --filter "name=$container_name" --format "{{.Status}}" 2>/dev/null)
+get_container_status() {
+    local name="$1"
+    local health=$(docker inspect --format='{{.State.Health.Status}}' "$name" 2>/dev/null)
+    local status=$(docker inspect --format='{{.State.Status}}' "$name" 2>/dev/null)
+    local running=$(docker inspect --format='{{.State.Running}}' "$name" 2>/dev/null)
     
-    if [ -z "$status" ]; then
+    if [ "$status" = "running" ] && [ "$running" = "true" ]; then
+        if [ "$health" = "healthy" ] || [ "$health" = "none" ] || [ -z "$health" ]; then
+            echo "HEALTHY"
+        elif [ "$health" = "starting" ]; then
+            echo "STARTING"
+        else
+            echo "UNHEALTHY"
+        fi
+    elif [ "$status" = "restarting" ]; then
+        echo "RESTARTING"
+    elif [ "$status" = "exited" ] || [ "$status" = "dead" ]; then
         echo "DOWN"
-    elif echo "$status" | grep -q "unhealthy"; then
-        echo "UNHEALTHY"
-    elif echo "$status" | grep -q "Up"; then
-        echo "HEALTHY"
     else
         echo "UNKNOWN"
     fi
 }
 
-# Get container exit code if it crashed
-get_exit_code() {
-    local container_name="$1"
-    local exit_code=$(docker inspect --format='{{.State.ExitCode}}' "$container_name" 2>/dev/null)
-    echo "$exit_code"
+get_container_stats() {
+    local name="$1"
+    docker stats "$name" --no-stream --format "CPU:{{.CPUPerc}} MEM:{{.MemPerc}}" 2>/dev/null || echo "N/A"
 }
 
-# Get container uptime
-get_uptime() {
-    local container_name="$1"
-    local uptime=$(docker ps --filter "name=$container_name" --format "{{.RunningFor}}" 2>/dev/null)
-    echo "$uptime"
-}
-
-# Restart a container via docker-compose
-restart_container() {
-    local container_name="$1"
-    local reason="$2"
-    local service_name=""
+zero_downtime_restart() {
+    local service="$1"
+    local container="$2"
     
-    # Map container name to service name
-    case "$container_name" in
-        "freqtrade-main") service_name="freqtrade-main" ;;
-        "freqtrade-trend") service_name="freqtrade-trend" ;;
-        "freqtrade-meanrev") service_name="freqtrade-meanrev" ;;
-        "freqtrade-breakout") service_name="freqtrade-breakout" ;;
-        "freqtrade-redis") service_name="redis" ;;
-        "freqtrade-notifier") service_name="notifier" ;;
-        *) service_name="" ;;
-    esac
+    log "RESTART" "Initiating zero-downtime restart" "$container"
     
-    if [ -z "$service_name" ]; then
-        log "ERROR" "Unknown container: $container_name"
+    # Pull latest image if needed
+    docker compose -f "$COMPOSE_FILE" pull "$service" 2>/dev/null || true
+    
+    # Scale up new container first (rolling update style)
+    local temp_name="${container}-temp-$$"
+    
+    # Start new container
+    if ! docker compose -f "$COMPOSE_FILE" run -d --name "$temp_name" "$service" 2>/dev/null; then
+        log "ERROR" "Failed to start temporary container" "$container"
         return 1
     fi
     
-    log "RESTART" "Restarting due to: $reason" "$container_name"
-    
-    # Record restart time
-    local now=$(date +%s)
-    last_restart_time["$container_name"]=$now
-    
-    # Increment restart count
-    if [ -z "${restart_count[$container_name]}" ]; then
-        restart_count["$container_name"]=1
-    else
-        restart_count["$container_name"]=$((${restart_count[$container_name]} + 1))
-    fi
-    
-    # Check if we've exceeded max restarts
-    if [ "${restart_count[$container_name]}" -gt "$MAX_RESTART_ATTEMPTS" ]; then
-        log "CRITICAL" "Max restart attempts exceeded (${MAX_RESTART_ATTEMPTS}). Manual intervention required!" "$container_name"
-        return 1
-    fi
-    
-    # Attempt restart
-    log "INFO" "Executing docker-compose restart... (attempt ${restart_count[$container_name]})" "$container_name"
-    
-    cd "$WORKSPACE" || return 1
-    
-    # Find docker compose (try 'docker compose' first, then 'docker-compose')
-    DCMD="docker compose"
-    if ! docker compose version >/dev/null 2>&1; then
-        if command -v docker-compose >/dev/null 2>&1; then
-            DCMD="docker-compose"
-        else
-            log "ERROR" "Neither 'docker compose' nor 'docker-compose' found" "$container_name"
-            return 1
+    # Wait for new container to be healthy
+    local wait_count=0
+    while [ $wait_count -lt 30 ]; do
+        local status=$(get_container_status "$temp_name")
+        if [ "$status" = "HEALTHY" ]; then
+            log "INFO" "New container healthy, switching traffic" "$container"
+            break
         fi
-    fi
-    
-    # Stop the container
-    $DCMD -f "$COMPOSE_FILE" stop "$service_name" 2>&1 | while read line; do
-        log "INFO" "STOP: $line" "$container_name"
+        sleep 2
+        wait_count=$((wait_count + 1))
     done
     
-    # Remove the container to ensure clean restart
-    docker rm -f "$container_name" 2>/dev/null || true
-    
-    # Start the container
-    local start_output=$($DCMD -f "$COMPOSE_FILE" up -d "$service_name" 2>&1)
-    local start_status=$?
-    
-    if [ $start_status -eq 0 ]; then
-        sleep 5  # Give it time to start
-        local new_status=$(check_container_health "$container_name")
-        if [ "$new_status" == "HEALTHY" ]; then
-            log "RESTART" "✅ Container restarted successfully" "$container_name"
-            return 0
-        else
-            log "ERROR" "❌ Container started but not healthy (status: $new_status)" "$container_name"
-            return 1
-        fi
-    else
-        log "ERROR" "❌ Failed to restart: $start_output" "$container_name"
+    if [ $wait_count -ge 30 ]; then
+        log "ERROR" "New container failed health check" "$container"
+        docker rm -f "$temp_name" 2>/dev/null
         return 1
     fi
-}
-
-# Reset restart count if container has been stable
-reset_restart_count_if_stable() {
-    local container_name="$1"
-    local now=$(date +%s)
-    local last_restart="${last_restart_time[$container_name]:-0}"
-    local time_since_restart=$((now - last_restart))
     
-    # If container has been running for 10 minutes without issues, reset count
-    if [ "$time_since_restart" -gt 600 ] && [ "${restart_count[$container_name]:-0}" -gt 0 ]; then
-        restart_count["$container_name"]=0
-        log "INFO" "Reset restart count - container stable for 10+ minutes" "$container_name"
-    fi
+    # Stop old container
+    docker stop "$container" 2>/dev/null || true
+    docker rm -f "$container" 2>/dev/null || true
+    
+    # Rename new container
+    docker rename "$temp_name" "$container" 2>/dev/null || true
+    
+    log "RESTART" "✅ Zero-downtime restart completed" "$container"
+    return 0
 }
 
-# Main monitoring loop
-monitor_loop() {
-    local containers=("freqtrade-main" "freqtrade-trend" "freqtrade-meanrev" "freqtrade-breakout" "freqtrade-redis" "freqtrade-notifier")
+restart_with_backoff() {
+    local service="$1"
+    local container="$2"
+    local reason="$3"
+    
+    local count=${RESTART_COUNT[$container]:-0}
+    local last=${LAST_RESTART_TIME[$container]:-0}
+    local now=$(date +%s)
+    
+    # Reset count if outside window
+    if [ $((now - last)) -gt $RESTART_WINDOW ]; then
+        count=0
+    fi
+    
+    if [ $count -ge $MAX_RESTART_ATTEMPTS ]; then
+        log "CRITICAL" "Max restarts exceeded ($MAX_RESTART_ATTEMPTS). Manual intervention required!" "$container"
+        echo "[{\"severity\":\"CRITICAL\",\"message\":\"Container $container exceeded max restarts\",\"timestamp\":\"$(date -Iseconds)\"}]" >> "$ALERT_LOG"
+        return 1
+    fi
+    
+    log "RESTART" "Attempt $((count + 1))/$MAX_RESTART_ATTEMPTS: $reason" "$container"
+    
+    # Exponential backoff
+    local backoff=$((10 * (2 ** count)))
+    [ $backoff -gt 300 ] && backoff=300
+    
+    RESTART_COUNT[$container]=$((count + 1))
+    LAST_RESTART_TIME[$container]=$now
+    
+    # Try zero-downtime restart first
+    if ! zero_downtime_restart "$service" "$container"; then
+        log "WARN" "Zero-downtime restart failed, using standard restart" "$container"
+        
+        # Standard restart
+        docker compose -f "$COMPOSE_FILE" stop "$service" 2>/dev/null
+        docker rm -f "$container" 2>/dev/null
+        sleep $backoff
+        docker compose -f "$COMPOSE_FILE" up -d "$service"
+        
+        # Wait and verify
+        sleep 10
+        local new_status=$(get_container_status "$container")
+        if [ "$new_status" != "HEALTHY" ]; then
+            log "ERROR" "❌ Restart failed, container not healthy" "$container"
+            return 1
+        fi
+    fi
+    
+    log "RESTART" "✅ Restart successful" "$container"
+    return 0
+}
+
+# ═════════════════════════════════════════════════════════════════
+# REGIME FILTER INTEGRATION
+# ═════════════════════════════════════════════════════════════════
+check_regime_filter() {
+    local pause_file="/tmp/trading_paused"
+    if [ -f "$pause_file" ]; then
+        local reason=$(cat "$pause_file" 2>/dev/null)
+        log "WARN" "Trading paused by regime filter: $reason"
+        return 1
+    fi
+    return 0
+}
+
+# ═════════════════════════════════════════════════════════════════
+# MONITORING LOOP
+# ═════════════════════════════════════════════════════════════════
+MONITOR_LOOP() {
+    local services=("freqtrade-range" "regime-filter")
+    
+    log "INFO" "Self-healing agent started"
+    log "INFO" "Check interval: ${CHECK_INTERVAL}s | Max restarts: ${MAX_RESTART_ATTEMPTS}"
+    log "INFO" "Zero-downtime restart: ENABLED"
     
     while true; do
-        for container in "${containers[@]}"; do
-            local status=$(check_container_health "$container")
+        for service in "${services[@]}"; do
+            local container="freqtrade-${service}"
+            [ "$service" = "regime-filter" ] && container="freqtrade-${service}"
+            [ "$service" = "freqtrade-range" ] && container="92351c7fbb00_freqtrade-range"
+            
+            # Check if container exists
+            if ! docker ps -a --format "{{.Names}}" | grep -q "^${container}$"; then
+                # Try to find actual container name
+                container=$(docker ps -a --format "{{.Names}}" | grep "$service" | head -1)
+                [ -z "$container" ] && continue
+            fi
+            
+            local status=$(get_container_status "$container")
+            local stats=$(get_container_stats "$container")
             
             case "$status" in
-                "DOWN")
-                    local exit_code=$(get_exit_code "$container")
-                    log "WARN" "Container DOWN (exit code: ${exit_code})" "$container"
-                    restart_container "$container" "Container crashed/exited with code ${exit_code}"
+                "DOWN"|"UNKNOWN")
+                    log "WARN" "Container DOWN (status: $status, stats: $stats)" "$container"
+                    restart_with_backoff "$service" "$container" "Container crashed"
                     ;;
                 "UNHEALTHY")
-                    log "WARN" "Health check failed" "$container"
-                    restart_container "$container" "Health check failing"
+                    log "WARN" "Health check failing (stats: $stats)" "$container"
+                    restart_with_backoff "$service" "$container" "Health check failed"
+                    ;;
+                "STARTING")
+                    log "INFO" "Container starting..." "$container"
                     ;;
                 "HEALTHY")
-                    reset_restart_count_if_stable "$container"
-                    ;;
-                "UNKNOWN")
-                    log "WARN" "Container in unknown state" "$container"
-                    restart_container "$container" "Unknown container state"
+                    # Check resource usage
+                    local cpu=$(echo "$stats" | grep -oP 'CPU:\K[0-9.]+' || echo "0")
+                    local mem=$(echo "$stats" | grep -oP 'MEM:\K[0-9.]+' || echo "0")
+                    
+                    if [ "${cpu%.*}" -gt 90 ] 2>/dev/null; then
+                        log "WARN" "High CPU usage: ${cpu}%" "$container"
+                    fi
+                    if [ "${mem%.*}" -gt 90 ] 2>/dev/null; then
+                        log "WARN" "High memory usage: ${mem}%" "$container"
+                    fi
                     ;;
             esac
         done
         
-        # Sleep before next check
+        # Check regime filter
+        check_regime_filter
+        
         sleep "$CHECK_INTERVAL"
     done
 }
 
-# Signal handlers
+# ═════════════════════════════════════════════════════════════════
+# SIGNAL HANDLERS
+# ═════════════════════════════════════════════════════════════════
 cleanup() {
-    log "INFO" "Self-healing agent shutting down"
+    log "INFO" "Shutting down gracefully..."
     rm -f "$PID_FILE"
     exit 0
 }
 
 trap cleanup SIGTERM SIGINT
 
-# Show status
+# ═════════════════════════════════════════════════════════════════
+# STATUS DISPLAY
+# ═════════════════════════════════════════════════════════════════
 show_status() {
-    echo ""
     echo -e "${BLUE}═══════════════════════════════════════════════════════════════${NC}"
-    echo -e "${BLUE}  Self-Healing Agent Status${NC}"
+    echo -e "${BLUE}  Freq Self-Healing Agent - Status${NC}"
     echo -e "${BLUE}═══════════════════════════════════════════════════════════════${NC}"
     echo ""
     
-    local containers=("freqtrade-main" "freqtrade-trend" "freqtrade-meanrev" "freqtrade-breakout" "freqtrade-redis" "freqtrade-notifier")
-    
-    for container in "${containers[@]}"; do
-        local status=$(check_container_health "$container")
-        local uptime=$(get_uptime "$container")
+    local containers=$(docker ps --filter "name=freqtrade" --format "{{.Names}}" 2>/dev/null)
+    for container in $containers; do
+        local status=$(get_container_status "$container")
+        local stats=$(get_container_stats "$container)
         
         case "$status" in
-            "HEALTHY")
-                echo -e "  ${GREEN}●${NC} $container - $status ($uptime)"
-                ;;
-            "DOWN")
-                echo -e "  ${RED}●${NC} $container - $status"
-                ;;
-            *)
-                echo -e "  ${YELLOW}●${NC} $container - $status"
-                ;;
+            "HEALTHY") echo -e "  ${GREEN}●${NC} $container - $status" ;;
+            "DOWN") echo -e "  ${RED}●${NC} $container - $status" ;;
+            *) echo -e "  ${YELLOW}●${NC} $container - $status" ;;
         esac
+        echo "      Stats: $stats"
     done
     
     echo ""
-    echo "  Log file: $LOG_FILE"
+    echo "  Log: $LOG_FILE"
+    echo "  Alerts: $ALERT_LOG"
     echo ""
-    
-    if [ -f "$LOG_FILE" ]; then
-        echo -e "${BLUE}  Recent Restart Events:${NC}"
-        echo ""
-        grep "\[RESTART\]" "$LOG_FILE" | tail -5 || echo "  No restarts recorded yet"
-        echo ""
-    fi
 }
 
-# Parse arguments
+# ═════════════════════════════════════════════════════════════════
+# MAIN
+# ═════════════════════════════════════════════════════════════════
 case "${1:-}" in
     --status)
         show_status
@@ -285,66 +300,31 @@ case "${1:-}" in
         ;;
     --stop)
         if [ -f "$PID_FILE" ]; then
-            local pid=$(cat "$PID_FILE")
-            kill "$pid" 2>/dev/null || true
+            kill "$(cat "$PID_FILE")" 2>/dev/null && echo "Stopped" || echo "Not running"
             rm -f "$PID_FILE"
-            echo "Self-healing agent stopped"
-        else
-            echo "Self-healing agent not running"
         fi
         exit 0
         ;;
     --logs)
-        if [ -f "$LOG_FILE" ]; then
-            tail -f "$LOG_FILE"
-        else
-            echo "No log file found. Start the agent first."
-            exit 1
-        fi
-        exit 0
-        ;;
-    --help|-h)
-        echo "Self-Healing Agent - Container Monitor & Auto-Restart Service"
-        echo ""
-        echo "Usage: $0 [OPTION]"
-        echo ""
-        echo "Options:"
-        echo "  (none)    Start the monitoring agent in foreground"
-        echo "  --status  Show container status and restart history"
-        echo "  --stop    Stop the running agent"
-        echo "  --logs    Follow the restart log"
-        echo "  --help    Show this help message"
-        echo ""
-        echo "Monitored containers:"
-        echo "  - freqtrade-main (Main trading bot)"
-        echo "  - freqtrade-trend (Trend following bot)"
-        echo "  - freqtrade-meanrev (Mean reversion bot)"
-        echo "  - freqtrade-breakout (Breakout scalper bot)"
-        echo "  - freqtrade-redis (Redis service)"
-        echo "  - freqtrade-notifier (Notification service)"
+        tail -f "$LOG_FILE" 2>/dev/null || echo "No logs yet"
         exit 0
         ;;
 esac
 
-# Check if already running (skip if SKIP_CHECK_RUNNING is set)
-if [ -z "$SKIP_CHECK_RUNNING" ]; then
-    if [ -f "$PID_FILE" ]; then
-        local old_pid=$(cat "$PID_FILE" 2>/dev/null)
-        if [ -n "$old_pid" ] && ps -p "$old_pid" > /dev/null 2>&1; then
-            if ps -p "$old_pid" -o cmd= 2>/dev/null | grep -q "self-healing-agent"; then
-                echo "Self-healing agent already running (PID: $old_pid)"
-                exit 1
-            fi
-        fi
-        rm -f "$PID_FILE"
+# Check if already running
+if [ -f "$PID_FILE" ]; then
+    if ps -p "$(cat "$PID_FILE")" >/dev/null 2>&1; then
+        echo "Already running (PID: $(cat "$PID_FILE"))"
+        exit 1
     fi
+    rm -f "$PID_FILE"
 fi
 
-# Write our PID (parent process)
+# Create directories
+mkdir -p "$(dirname "$LOG_FILE")" "$(dirname "$ALERT_LOG")"
+
+# Write PID
 echo $$ > "$PID_FILE"
 
-# Main execution
-init_log
-log "INFO" "Monitoring started (interval: ${CHECK_INTERVAL}s)"
-log "INFO" "Max restarts: ${MAX_RESTART_ATTEMPTS} per container per ${RESTART_WINDOW}s window"
-monitor_loop
+# Start monitoring
+MONITOR_LOOP
