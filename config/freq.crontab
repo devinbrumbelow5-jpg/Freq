@@ -1,0 +1,21 @@
+# Freq Crontab - System Health Checks
+# Run: crontab -e and paste this
+
+# Health monitor (runs every minute)
+* * * * * cd /root/.openclaw/workspace && ./scripts/health_monitor.sh > /dev/null 2>&1 &
+
+# Container supervisor (runs every 30 seconds via wrapper)
+* * * * * cd /root/.openclaw/workspace && timeout 30 ./scripts/container_supervisor.sh > /dev/null 2>&1 &
+* * * * * (sleep 30; cd /root/.openclaw/workspace && timeout 30 ./scripts/container_supervisor.sh > /dev/null 2>&1) &
+
+# Log rotation (daily at 2 AM)
+0 2 * * * /root/.openclaw/workspace/scripts/rotate_logs.sh >> /root/.openclaw/workspace/logs/cron.log 2>&1
+
+# Performance report (every hour)
+0 * * * * /root/.openclaw/workspace/scripts/performance_report.sh >> /root/.openclaw/workspace/logs/performance_cron.log 2>&1
+
+# Full system audit (daily at 6 AM)
+0 6 * * * /root/.openclaw/workspace/scripts/system_audit.sh >> /root/.openclaw/workspace/logs/audit_cron.log 2>&1
+
+# Clean old alert logs (weekly)
+0 3 * * 0 find /root/.openclaw/workspace/logs -name "*.log" -mtime +30 -delete 2>/dev/null

@@ -1,0 +1,172 @@
+# FREQ SCALPER SYSTEM AUDIT REPORT
+**Timestamp:** 2026-04-02  
+**Auditor:** Freq Self-Healing Agent  
+**Status:** 🔴 CRITICAL ISSUES FOUND
+
+---
+
+## EXECUTIVE SUMMARY
+
+| Category | Status | Count |
+|----------|--------|-------|
+| Running Containers | 🟡 | 1 (expected) |
+| Zombie Containers | 🟢 | 0 |
+| Orphan Containers | 🔴 | 2 |
+| Stale PID Files | 🔴 | 12 |
+| Websocket Errors | 🔴 | 100+ |
+| API Timeouts | 🔴 | Multiple |
+| Disk Space | 🟢 | OK (6% used) |
+| Memory | 🟢 | OK (74% free) |
+
+---
+
+## 🔴 CRITICAL FINDINGS
+
+### 1. STALE PID FILES (12 found)
+**Impact:** Process monitoring failures, duplicate process risks
+**Files:**
+- `/root/.openclaw/workspace/*.pid` (9 files) - ALL STALE
+- `/root/.openclaw/workspace/profits/*.pid` (2 files) - ALL STALE
+- `/root/.openclaw/workspace/profits/daemon.pid` - STALE
+
+**Risk:** System thinks processes are running when they're not. Can lead to:
+- Failed restart attempts
+- Resource leaks
+- Monitoring blind spots
+
+### 2. WEBSOCKET TIMEOUTS (100+ errors)
+**Pattern:** `ccxt.base.errors.RequestTimeout: Connection to wss://ws.okx.com:8443/ws/v5/business timed out`
+
+**Impact:** Data feed interruptions, missed trades, stale pricing
+**Frequency:** Every 10-20 minutes
+**Root Cause:** OKX websocket keepalive ping-pong failures
+
+### 3. ORPHAN DOCKER CONTAINERS
+```
+suspicious_snyder    Up 4 hours    freqtradeorg/freqtrade:stable
+busy_montalcini      Up 9 hours    freqtradeorg/freqtrade:stable
+```
+**Issue:** No clear purpose, consuming resources
+
+### 4. WEBSOCKET FALLBACK TO REST
+**Log Pattern:** "Couldn't reuse watch for X/USDT, 5m, falling back to REST api"
+**Impact:** Higher latency, rate limit risk, stale data
+
+### 5. BACKGROUND PROCESSES RUNNING
+- `download-data` for Binance (PID 185896) - May be failing silently
+- `backtest` (PID 275063) - Stuck/hanging process
+
+### 6. NO ALERT SYSTEM
+**Gap:** No notifications for:
+- Downtime >10min
+- Websocket failures
+- Rate limits
+- Drawdown >12%
+- Container crashes
+
+---
+
+## 🟡 MEDIUM PRIORITY
+
+### 7. LOG ROTATION MISSING
+**File:** `range.log` (705KB, growing)
+**Risk:** Disk fill, log analysis difficulty
+
+### 8. NO HEALTH CHECK ENDPOINT
+**Gap:** No `/health` endpoint for external monitoring
+
+### 9. RATE LIMIT MONITORING
+**Gap:** No tracking of OKX rate limit status
+
+### 10. MEMORY/CPU MONITORING
+**Gap:** No alerts for resource exhaustion
+
+---
+
+## 🟢 LOW PRIORITY
+
+### 11. CONFIG DRIFT
+Multiple strategy configs exist but only one active.
+
+### 12. GITHUB TOKEN IN PLAINTEXT
+Token found in shell history (security risk).
+
+---
+
+## PRIORITIZED FIX LIST
+
+### P0 - IMMEDIATE (Fix within 1 hour)
+1. [ ] Kill orphan containers (`suspicious_snyder`, `busy_montalcini`)
+2. [ ] Clean all stale PID files
+3. [ ] Kill stuck background processes (download-data, backtest)
+4. [ ] Add websocket timeout recovery with exponential backoff
+5. [ ] Deploy health check ping every 60s
+
+### P1 - TODAY (Fix within 24 hours)
+6. [ ] Implement auto-restart on container crash
+7. [ ] Add email/Slack alerts for downtime >10min
+8. [ ] Add Cloudflare/Binance/Bybit connectivity checks
+9. [ ] Implement log rotation (max 100MB per log)
+10. [ ] Add rate limit monitoring
+
+### P2 - THIS WEEK (Fix within 7 days)
+11. [ ] Build Grafana dashboard for monitoring
+12. [ ] Implement circuit breaker for exchange failures
+13. [ ] Add disk space alerts (>80%)
+14. [ ] Memory leak detection
+15. [ ] Automated backup of trade database
+
+### P3 - BACKLOG
+16. [ ] Migrate to kubernetes for better orchestration
+17. [ ] Implement multi-exchange arbitrage
+18. [ ] Add ML-based crash prediction
+
+---
+
+## RECOMMENDED ARCHITECTURE
+
+```
+┌─────────────────────────────────────────┐
+│        MONITORING LAYER                │
+│  - Health checks every 60s             │
+│  - Email/Slack alerts on failure         │
+│  - Prometheus metrics export             │
+└──────────────────┬──────────────────────┘
+                   │
+┌──────────────────▼──────────────────────┐
+│        ORCHESTRATION LAYER             │
+│  - Docker-compose with restart:always  │
+│  - Watchdog process for PID files      │
+│  - Auto-restart on crash               │
+└──────────────────┬──────────────────────┘
+                   │
+┌──────────────────▼──────────────────────┐
+│        FREQTRADE BOT                   │
+│  - Websocket with retry logic           │
+│  - REST API fallback                    │
+│  - Exponential backoff on errors      │
+└─────────────────────────────────────────┘
+```
+
+---
+
+## CURRENT BOT STATUS
+
+| Bot | Status | Uptime | Health |
+|-----|--------|--------|--------|
+| freqtrade-range | 🟢 Running | 2 hours | Websocket issues |
+
+---
+
+## NEXT ACTIONS REQUIRED
+
+1. **APPROVE** P0 fixes for immediate deployment
+2. **PROVIDE** email/Slack webhook for alerts
+3. **DECIDE** on monitoring stack (Prometheus/Grafana vs simple)
+
+**Estimated fix time:** 2-3 hours for P0+P1
+
+---
+
+*Report generated by Freq System Auditor*
+*Next audit scheduled: 24 hours*
