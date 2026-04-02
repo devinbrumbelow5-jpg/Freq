@@ -1,0 +1,24 @@
+#!/bin/bash
+# FreqAI Retraining Cron Schedule
+# Install with: crontab /root/.openclaw/workspace/config/freqai_crontab
+
+SHELL=/bin/bash
+PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+
+# FreqAI Retraining - Every 6 hours
+0 */6 * * * cd /root/.openclaw/workspace && python3 scripts/freqai_retrain_service.py >> logs/freqai_retrain_cron.log 2>&1
+
+# Drawdown Regime Guard - Every minute
+* * * * * cd /root/.openclaw/workspace && python3 scripts/drawdown_regime_guard.py >> logs/regime_guard_cron.log 2>&1
+
+# Performance Reporting - Every hour
+0 * * * * cd /root/.openclaw/workspace && ./scripts/performance_report.sh >> logs/performance_cron.log 2>&1
+
+# Log rotation - Daily at 2 AM
+0 2 * * * cd /root/.openclaw/workspace && ./scripts/rotate_logs.sh
+
+# System health check - Every 5 minutes
+*/5 * * * * cd /root/.openclaw/workspace && ./scripts/health_monitor.sh >> logs/health_monitor_cron.log 2>&1
+
+# Database backup - Daily at 4 AM
+0 4 * * * cp /root/.openclaw/workspace/freqtrade/user_data/trades_range.sqlite /root/.openclaw/workspace/backups/trades_$(date +\%Y\%m\%d).sqlite
