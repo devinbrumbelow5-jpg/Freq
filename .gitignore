@@ -28,3 +28,4 @@ node_modules/
 tradesv3*.sqlite*
 *.pyc
 *.pyo
+KIMMY_SCALPER/
