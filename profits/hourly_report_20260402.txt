@@ -2818,3 +2818,35 @@ freqtrade-log-aggregator: Up 4 hours
 🔴 STATUS: DRAWDOWN
 ==============================================
 
+==============================================
+⚡ FREQ ULTIMATE SCALPER - HOURLY REPORT
+==============================================
+Time: 2026-04-02 10:00 PM CDT
+Location: Brownwood, Texas (Central Time)
+
+📊 SWARM STATUS:
+freqtrade-regime-filter: Up About an hour (unhealthy)
+freqtrade-range: Up 4 hours (unhealthy)
+freqtrade-log-aggregator: Up 4 hours
+
+💰 TRADING PERFORMANCE (Last Hour):
+  range               :  1 trades | $ -0.0374 | 0W/1L
+
+----------------------------------------------
+  HOURLY TOTAL:        1 trades | $ -0.0374 | 0W/1L
+
+📈 DAILY SUMMARY (Since Midnight CT):
+  TODAY: 1 trades | $-0.0374 USDT
+
+🎯 OPEN POSITIONS:
+  No open positions
+
+⚙️  SYSTEM HEALTH:
+  CPU: 0.0%
+  Memory: 83.7%
+  Disk: 6%
+
+==============================================
+🔴 STATUS: DRAWDOWN
+==============================================
+
