@@ -2850,3 +2850,67 @@ freqtrade-log-aggregator: Up 4 hours
 🔴 STATUS: DRAWDOWN
 ==============================================
 
+==============================================
+⚡ FREQ ULTIMATE SCALPER - HOURLY REPORT
+==============================================
+Time: 2026-04-02 10:36 PM CDT
+Location: Brownwood, Texas (Central Time)
+
+📊 SWARM STATUS:
+freqtrade-regime-filter: Up 2 hours (unhealthy)
+freqtrade-range: Up 5 hours (unhealthy)
+freqtrade-log-aggregator: Up 5 hours
+
+💰 TRADING PERFORMANCE (Last Hour):
+  No trades in last hour
+
+----------------------------------------------
+  HOURLY TOTAL:        0 trades | $  0.0000 | 0W/0L
+
+📈 DAILY SUMMARY (Since Midnight CT):
+  TODAY: 1 trades | $-0.0374 USDT
+
+🎯 OPEN POSITIONS:
+  No open positions
+
+⚙️  SYSTEM HEALTH:
+  CPU: 0.6%
+  Memory: 93.1%
+  Disk: 6%
+
+==============================================
+⏳ STATUS: NO TRADES
+==============================================
+
+==============================================
+⚡ FREQ ULTIMATE SCALPER - HOURLY REPORT
+==============================================
+Time: 2026-04-02 10:37 PM CDT
+Location: Brownwood, Texas (Central Time)
+
+📊 SWARM STATUS:
+freqtrade-regime-filter: Up 2 hours (unhealthy)
+freqtrade-range: Up 5 hours (unhealthy)
+freqtrade-log-aggregator: Up 5 hours
+
+💰 TRADING PERFORMANCE (Last Hour):
+  No trades in last hour
+
+----------------------------------------------
+  HOURLY TOTAL:        0 trades | $  0.0000 | 0W/0L
+
+📈 DAILY SUMMARY (Since Midnight CT):
+  TODAY: 1 trades | $-0.0374 USDT
+
+🎯 OPEN POSITIONS:
+  No open positions
+
+⚙️  SYSTEM HEALTH:
+  CPU: 0.0%
+  Memory: 93.4%
+  Disk: 6%
+
+==============================================
+⏳ STATUS: NO TRADES
+==============================================
+
