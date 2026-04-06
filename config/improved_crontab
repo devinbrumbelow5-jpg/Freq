@@ -1,0 +1,20 @@
+SHELL=/bin/bash
+PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+
+# Multi-Strategy Orchestrator - Every 5 minutes
+*/5 * * * * cd /root/.openclaw/workspace && flock -n /tmp/orchestrator.lock -c 'python3 scripts/multi_strategy_orchestrator.py --rotate' >> logs/orchestrator.log 2>&1
+
+# Smart Position Sizing Check - Every hour
+0 * * * * cd /root/.openclaw/workspace && python3 scripts/smart_position_sizing.py >> logs/position_sizing.log 2>&1
+
+# Portfolio Heat Check - Every minute
+* * * * * cd /root/.openclaw/workspace && flock -n /tmp/regime_guard.lock -c 'python3 scripts/drawdown_regime_guard.py' >> logs/regime_guard_cron.log 2>&1
+
+# Health Monitor - Every 5 minutes
+*/5 * * * * cd /root/.openclaw/workspace && ./scripts/health_check.sh >> logs/health_check.log 2>&1
+
+# Log rotation - Daily at 2 AM
+0 2 * * * cd /root/.openclaw/workspace/logs && find . -name "*.log" -size +50M -exec > {} \;
+
+# Database backup - Daily at 4 AM
+0 4 * * * cd /root/.openclaw/workspace && cp freqtrade/user_data/trades_*.sqlite backups/ 2>/dev/null

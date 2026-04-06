@@ -1,0 +1,252 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Kimmy Scalper Dashboard v2.0</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: 'Segoe UI', monospace;
+            background: #0a0a0a;
+            color: #00ff00;
+            min-height: 100vh;
+        }
+        .container { max-width: 1400px; margin: 0 auto; padding: 20px; }
+        header {
+            background: linear-gradient(90deg, #1a1a1a, #2d2d2d);
+            padding: 20px;
+            border-bottom: 2px solid #00ff00;
+            margin-bottom: 20px;
+        }
+        h1 { font-size: 2em; text-shadow: 0 0 10px #00ff00; }
+        .grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 20px;
+        }
+        .card {
+            background: #1a1a1a;
+            border: 1px solid #333;
+            border-radius: 8px;
+            padding: 20px;
+            box-shadow: 0 4px 6px rgba(0,255,0,0.1);
+        }
+        .card h3 {
+            color: #00ff00;
+            border-bottom: 1px solid #333;
+            padding-bottom: 10px;
+            margin-bottom: 15px;
+        }
+        .metric {
+            display: flex;
+            justify-content: space-between;
+            padding: 10px 0;
+            border-bottom: 1px solid #222;
+        }
+        .metric:last-child { border-bottom: none; }
+        .label { color: #888; }
+        .value { font-weight: bold; }
+        .profit { color: #00ff00; }
+        .loss { color: #ff4444; }
+        .status {
+            display: inline-block;
+            padding: 5px 15px;
+            border-radius: 20px;
+            font-size: 0.9em;
+        }
+        .status.active { background: #004400; color: #00ff00; }
+        .status.warning { background: #444400; color: #ffff00; }
+        .strategy-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 10px;
+            margin: 5px 0;
+            background: #222;
+            border-radius: 4px;
+        }
+        .strategy-name { color: #00ff00; }
+        .allocation { color: #ffff00; }
+        .refresh-btn {
+            background: #00ff00;
+            color: #000;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-weight: bold;
+        }
+        .refresh-btn:hover { background: #00cc00; }
+        #trade-log {
+            max-height: 300px;
+            overflow-y: auto;
+            font-family: monospace;
+            font-size: 0.85em;
+        }
+        .trade-entry { padding: 5px; border-bottom: 1px solid #222; }
+        .trade-entry:hover { background: #222; }
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+        .live-dot {
+            display: inline-block;
+            width: 10px;
+            height: 10px;
+            background: #00ff00;
+            border-radius: 50%;
+            margin-right: 10px;
+            animation: pulse 2s infinite;
+        }
+    </</style>>
+</head>>
+<body>
+    <div class="container"></header>>
+            <h1><span class="live-dot"></span>Kimmy Scalper Dashboard v2.0</h1>
+            <p>Multi-Strategy Trading Swarm | Real-time Monitoring</p>
+        </header>
+
+        <div class="grid">
+            <!-- Balance Card -->
+            <div class="card">
+                <h3>💰 Portfolio Balance</h3>
+                <div class="metric">
+                    <span class="label">Starting Capital</span>
+                    <span class="value">500.00 USDT</span>
+                </div>
+                <div class="metric">
+                    <span class="label">Current Balance</span>
+                    <span class="value profit" id="balance">501.41 USDT</span>
+                </div>
+                <div class="metric">
+                    <span class="label">Total Profit</span>
+                    <span class="value profit" id="profit">+1.41 USDT (+0.28%)</span>
+                </div>
+                <div class="metric">
+                    <span class="label">In Positions</span>
+                    <span class="value" id="positions">0 USDT</span>
+                </div>
+            </div>
+
+            <!-- Performance Card -->
+            <div class="card">
+                <h3>📈 Performance Metrics</h3>
+                <div class="metric">
+                    <span class="label">Total Trades</span>
+                    <span class="value" id="trades">24</span>
+                </div>
+                <div class="metric">
+                    <span class="label">Win Rate</span>
+                    <span class="value" id="winrate">33.3%</span>
+                </div>
+                <div class="metric">
+                    <span class="label">Profit Factor</span>
+                    <span class="value" id="pf">1.33</span>
+                </div>
+                <div class="metric">
+                    <span class="label">Sharpe Ratio</span>
+                    <span class="value profit" id="sharpe">11.18</span>
+                </div>
+                <div class="metric">
+                    <span class="label">Max Drawdown</span>
+                    <span class="value loss" id="drawdown">-1.11%</span>
+                </div>
+            </div>
+
+            <!-- Strategy Allocation Card -->
+            <div class="card">
+                <h3>🎯 Strategy Allocation</h3>
+                <div class="strategy-row">
+                    <span class="strategy-name">Mean Reversion</span>
+                    <span class="allocation">35%</span>
+                    <span class="status active">Active</span>
+                </div>
+                <div class="strategy-row">
+                    <span class="strategy-name">Grid Scalper</span>
+                    <span class="allocation">40%</span>
+                    <span class="status active">Active</span>
+                </div>
+                <div class="strategy-row">
+                    <span class="strategy-name">Breakout Momentum</span>
+                    <span class="allocation">25%</span>
+                    <span class="status warning">Standby</span>
+                </div>
+                <div class="metric" style="margin-top: 15px;">
+                    <span class="label">Current Regime</span>
+                    <span class="value" id="regime">CHOPPY_ILLIQUID</span>
+                </div>
+            </div>
+
+            <!-- System Status Card -->
+            <div class="card">
+                <h3>⚡ System Status</h3>
+                <div class="metric">
+                    <span class="label">Range Bot</span>
+                    <span class="status active">Running</span>
+                </div>
+                <div class="metric">
+                    <span class="label">Grid Bot</span>
+                    <span class="status active">Running</span>
+                </div>
+                <div class="metric">
+                    <span class="label">Breakout Bot</span>
+                    <span class="status active">Running</span>
+                </div>
+                <div class="metric">
+                    <span class="label">Regime Guard</span>
+                    <span class="status active">Armed</span>
+                </div>
+                <div class="metric">
+                    <span class="label">Last Update</span>
+                    <span class="value" id="lastupdate">Just now</span>
+                </div>
+            </div>
+
+            <!-- Open Positions Card -->
+            <div class="card">
+                <h3>📊 Open Positions</h3>
+                <div id="open-positions">
+                    <p style="color: #666; text-align: center; padding: 20px;">No open positions</p>
+                </div>
+            </div>
+
+            <!-- Recent Trades Card -->
+            <div class="card" style="grid-column: span 2;">
+                <h3>📝 Recent Trades</h3>
+                <div id="trade-log">
+                    <div class="trade-entry">
+                        <span style="color: #00ff00;">[2026-04-06 00:39]</span> 
+                        SOL/USDT <span class="profit">+3.58%</span> | Grid Strategy
+                    </div>
+                    <div class="trade-entry">
+                        <span style="color: #00ff00;">[2026-04-06 00:39]</span> 
+                        LINK/USDT <span class="profit">+3.47%</span> | Mean Reversion
+                    </div>
+                    <div class="trade-entry">
+                        <span style="color: #ff4444;">[2026-04-05 20:22]</span> 
+                        AVAX/USDT <span class="loss">-0.39%</span> | Mean Reversion
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div style="text-align: center; margin-top: 30px;">
+            <button class="refresh-btn" onclick="location.reload()">🔄 Refresh Dashboard</button>
+        </div>
+
+        <footer style="text-align: center; margin-top: 40px; padding: 20px; color: #666;">
+            <p>Kimmy Scalper v2.0 | Multi-Strategy Trading Swarm</p>
+            <p>Dry-run mode active - No real funds at risk</p>
+        </footer>
+    </div>
+
+    <script>
+        // Auto-refresh every 30 seconds
+        setTimeout(() => location.reload(), 30000);
+        
+        // Update timestamp
+        document.getElementById('lastupdate').textContent = new Date().toLocaleTimeString();
+    </script>
+</body>
+</html>

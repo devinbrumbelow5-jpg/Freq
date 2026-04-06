@@ -38,7 +38,7 @@ def get_recent_trades():
         
         query = """
         SELECT 
-            id, pair, is_open, profit_ratio, close_profit,
+            id, pair, is_open, close_profit, close_profit_abs,
             open_date, close_date
         FROM trades
         WHERE close_date > ? OR is_open = 1
@@ -62,20 +62,23 @@ def calculate_drawdown(trades):
     
     profits = []
     total_pnl = 0.0
-    peak = 0.0
-    max_drawdown = 0.0
     
     for trade in trades:
         profit = trade[3] if trade[3] is not None else 0.0
         profits.append(profit)
         total_pnl += profit
-        
-        if total_pnl > peak:
-            peak = total_pnl
-        
-        current_drawdown = peak - total_pnl
-        if current_drawdown > max_drawdown:
-            max_drawdown = current_drawdown
+    
+    # Calculate max drawdown properly
+    cumulative = 0.0
+    peak = 0.0
+    max_drawdown = 0.0
+    for p in profits:
+        cumulative += p
+        if cumulative > peak:
+            peak = cumulative
+        dd = peak - cumulative
+        if dd > max_drawdown:
+            max_drawdown = dd
     
     return max_drawdown, total_pnl, len(trades)
 
