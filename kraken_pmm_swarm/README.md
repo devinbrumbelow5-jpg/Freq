@@ -1,45 +1,80 @@
 # Kraken PMM Swarm
 
-CCXT-based Perpetual Market Making System with paper trading.
+A high-frequency passive market making trading system running on Kraken exchange with 6 trading pairs (BTC, ETH, SOL, AVAX, LINK, AAVE).
 
-## Features
-- 6 independent PMM bots (BTC, ETH, SOL, DOT, LINK, ADA)
-- Real-time Kraken WebSocket order book data
-- 100% paper trading simulation
-- Dynamic spread based on order book imbalance
-- Inventory skew for market neutrality
-- SQLite persistence for orders/fills/P&L
-- Rich terminal dashboard
+## Architecture
+
+- **Swarm Manager**: Orchestrates multiple PMM bots with centralized risk management
+- **PMM Bots**: Individual market makers per trading pair
+- **WebSocket Feeds**: Real-time price and order book data
+- **PostgreSQL**: Trade and position persistence
+- **Dashboard**: Real-time terminal-based monitoring
+- **Simulation Mode**: Realistic Kraken CLI with live order-book slippage
 
 ## Quick Start
 
 ```bash
-# Install dependencies
-pip install -r requirements.txt
+# Start the swarm
+./run_swarm.sh
 
-# Run the swarm
-python main.py
+# View dashboard
+tmux attach -t swarm_dashboard
+
+# Check status
+./run_with_monitor.sh
 ```
 
 ## Configuration
-Edit `config.yaml` to adjust:
-- Paper trading balances
-- Base spreads per pair
-- Order amounts
-- Position limits
 
-## Architecture
-- `kraken_paper_client.py` - CCXT Pro WebSocket + paper trading
-- `pmm_bot.py` - Individual bot logic with dynamic spread
-- `swarm_manager.py` - Orchestration + dashboard
-- `database.py` - SQLite persistence
+- `config_aggressive.yaml`: Main trading configuration
+- `kraken-pmm-swarm.service`: Systemd service file
 
-## Dashboard
-Live display shows:
-- Bot status, bids/asks, spreads
-- Positions and inventory skew
-- Recent fills
-- Paper balances
-- P&L summary
+## Components
 
-Press Ctrl+C to stop gracefully.
+| File | Purpose |
+|------|---------|
+| `swarm_manager.py` | Main orchestrator with risk management |
+| `pmm_bot.py` | Individual market maker bot |
+| `kraken_paper_client.py` | Kraken exchange client with paper trading |
+| `database.py` | PostgreSQL persistence layer |
+| `dashboard.py` | Real-time terminal dashboard |
+| `profit_guard.py` | Risk management and drawdown protection |
+| `verification_system.py` | System verification and health checks |
+| `live_readiness.py` | Live trading readiness checker |
+| `dry_run_system.py` | Dry run simulation |
+
+## Trading Pairs
+
+- BTC/USDT
+- ETH/USDT
+- SOL/USDT
+- AVAX/USDT
+- LINK/USDT
+- AAVE/USDT
+
+## Risk Controls
+
+- Max position size limits per bot
+- Inventory skew management
+- Drawdown circuit breakers
+- WebSocket health monitoring
+- PostgreSQL data synchronization
+
+## Requirements
+
+See `requirements.txt` for Python dependencies.
+
+## Database
+
+PostgreSQL with tables:
+- `positions`: Current positions per bot
+- `trades`: Trade history and PnL
+- `balances`: Cash balances
+- `bot_logs`: Event logs
+
+## Monitoring
+
+- Real-time dashboard (2-second updates)
+- Tmux session: `swarm_dashboard`
+- WebSocket latency monitoring
+- PnL tracking (realized + unrealized)

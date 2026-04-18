@@ -1,31 +1,52 @@
-# Sensitive files
-.openclaw/
-memory/
-SOUL.md
-USER.md
-IDENTITY.md
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+venv/
+env/
+ENV/
 
-# Data files
-data/
-*.sqlite
-*.sqlite-*
-*.pkl
-*.backup
+# Database files
+*.db
+*.db-journal
+*.db-wal
+*.db-shm
 
 # Logs
 logs/
 *.log
 
-# Python cache
-__pycache__/
-*.pyc
-*.pyo
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
 
-# Node modules
+# OS
+.DS_Store
+Thumbs.db
+
+# Secrets
+credentials.json
+secrets.yaml
+.env
+
+# Backups
+backups/
+*.bak
+*.backup
+
+# State files
+state/
+*.pid
+
+# Node
 node_modules/
 
-# Freqtrade runtime
-tradesv3*.sqlite*
-*.pyc
-*.pyo
-KIMMY_SCALPER/
+# Large binaries
+*.pkl
+*.feather
+*.parquet

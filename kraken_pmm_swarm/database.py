@@ -50,12 +50,28 @@ class FreqDB:
             self.put_conn(conn)
 
     def update_position(self, bot_id: str, pair: str, side: str, qty: float, entry_price: float, current_price: float = None):
+        """Update position with net-of-fees unrealized PnL"""
         conn = self.get_conn()
         cur = conn.cursor(cursor_factory=RealDictCursor)
         try:
-            unrealized = 0.0
+            # Fee and slippage constants
+            TAKER_FEE = 0.0026
+            SLIPPAGE = 0.0005
+            SINGLE_LEG_COST = TAKER_FEE + SLIPPAGE  # 0.31%
+            
+            # Calculate gross unrealized PnL
+            unrealized_gross = 0.0
             if current_price and qty != 0:
-                unrealized = (current_price - entry_price) * qty if side.upper() == "BUY" else (entry_price - current_price) * qty
+                unrealized_gross = (current_price - entry_price) * qty if side.upper() == "BUY" else (entry_price - current_price) * qty
+            
+            # Apply fee adjustment for unrealized PnL
+            # For unrealized, estimate net by accounting for fees on both legs
+            if qty != 0:
+                entry_fees = entry_price * qty * SINGLE_LEG_COST
+                estimated_exit_fees = current_price * qty * SINGLE_LEG_COST
+                unrealized = unrealized_gross - entry_fees - estimated_exit_fees
+            else:
+                unrealized = 0.0
 
             cur.execute("""
                 INSERT INTO positions (bot_id, pair, side, qty, entry_price, current_price, unrealized_pnl)
@@ -92,6 +108,50 @@ class FreqDB:
             cur.execute("INSERT INTO bot_logs (bot_id, level, message) VALUES (%s, %s, %s)",
                         (bot_id, level, message))
             conn.commit()
+        finally:
+            cur.close()
+            self.put_conn(conn)
+
+    def store_balance(self, currency: str, balance: float):
+        """Store account balance in database"""
+        conn = self.get_conn()
+        cur = conn.cursor()
+        try:
+            # Create balances table if not exists
+            cur.execute("""
+                CREATE TABLE IF NOT EXISTS balances (
+                    currency VARCHAR(10) PRIMARY KEY,
+                    balance DECIMAL(18, 8),
+                    timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                )
+            """)
+            
+            cur.execute("""
+                INSERT INTO balances (currency, balance, timestamp)
+                VALUES (%s, %s, CURRENT_TIMESTAMP)
+                ON CONFLICT (currency) DO UPDATE
+                SET balance = EXCLUDED.balance,
+                    timestamp = CURRENT_TIMESTAMP
+            """, (currency, balance))
+            conn.commit()
+        finally:
+            cur.close()
+            self.put_conn(conn)
+
+    def get_latest_balance(self, currency: str = 'USDC'):
+        """Get latest balance for a currency"""
+        conn = self.get_conn()
+        cur = conn.cursor()
+        try:
+            cur.execute("""
+                SELECT balance FROM balances 
+                WHERE currency = %s 
+                ORDER BY timestamp DESC LIMIT 1
+            """, (currency,))
+            result = cur.fetchone()
+            return float(result[0]) if result else 1000.0
+        except:
+            return 1000.0
         finally:
             cur.close()
             self.put_conn(conn)

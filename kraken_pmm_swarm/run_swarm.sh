@@ -1,3 +1,3 @@
 #!/bin/bash
-cd /home/$(whoami)/Freq/kraken_pmm_swarm
-python3 swarm_manager.py
+cd /root/.openclaw/workspace/kraken_pmm_swarm
+/root/.openclaw/workspace/kraken_pmm_swarm/venv/bin/python swarm_manager.py

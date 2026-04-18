@@ -1,7 +1,0 @@
-FROM python:3.11-slim
-
-RUN pip install --no-cache-dir requests
-
-WORKDIR /scripts
-
-CMD ["python", "-u", "regime_filter.py"]
