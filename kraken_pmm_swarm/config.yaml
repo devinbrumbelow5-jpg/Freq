@@ -1,0 +1,44 @@
+# Coinbase Aggressive Scalping Config
+# Higher frequency, smaller edges, more fills
+
+paper_balances:
+  USD: 6000.0
+  BTC: 0.1
+  ETH: 1.0
+  SOL: 20.0
+
+swarm:
+  refresh_interval: 0.5
+  price_move_threshold: 0.0005
+  max_slippage_pct: 0.03
+
+# AGGRESSIVE Config - Tighter to market, more frequent trades
+bots:
+  - pair: BTC/USD
+    base_spread_bps: 1.5
+    order_amount_usd: 300
+    max_position_pct: 0.5
+    
+  - pair: ETH/USD
+    base_spread_bps: 2.0
+    order_amount_usd: 300
+    max_position_pct: 0.5
+    
+  - pair: SOL/USD
+    base_spread_bps: 2.5
+    order_amount_usd: 300
+    max_position_pct: 0.5
+
+database:
+  path: "./coinbase_swarm.db"
+  backup_interval: 3600
+
+logging:
+  level: INFO
+  file: "./logs/coinbase_swarm.log"
+  max_size_mb: 100
+  backup_count: 5
+
+ui:
+  refresh_rate: 1.0
+  max_log_lines: 100
