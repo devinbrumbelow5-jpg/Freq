@@ -1,0 +1,27 @@
+# Kraken PMM Swarm Requirements
+# Python 3.11+
+
+# Core trading library
+ccxt>=4.2.0
+
+# Async database
+aiosqlite>=0.20.0
+
+# Terminal UI
+rich>=13.7.0
+
+# YAML config
+PyYAML>=6.0.1
+
+# Async utilities
+asyncio-mqtt>=0.16.1
+
+# Logging and monitoring
+structlog>=24.1.0
+python-json-logger>=2.0.7
+
+# Data validation
+pydantic>=2.6.0
+
+# Time handling
+python-dateutil>=2.8.2
